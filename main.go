@@ -2,9 +2,14 @@ package main
 
 import (
 	"fmt"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 	"net/http"
 )
+
+type PathUrls struct {
+	Path string `yaml:"path"`
+	Url  string `yaml:"url"`
+}
 
 func main() {
 	dictionary := map[string]string{
@@ -16,27 +21,29 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", 301)
 	})
-	handler := HandlerFunc(dictionary, mux)
+	handlerFunc := HandlerFunc(dictionary, mux)
 
 	yml := `
 - path: /rick
   url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 - path: /google
   url: https://www.youtube.com/watch?v=dQw4w9WgXcQ`
-	ymlHandler := YmlHandler([]byte(yml), HandlerFunc)
+	ymlHandlerFunc := YmlHandler([]byte(yml), mux)
 
-	err2 := http.ListenAndServe(":8010", ymlHandler)
+	http.Handle("/", http.HandlerFunc(ymlHandlerFunc))
+	err2 := http.ListenAndServe(":8010", nil)
 	if err2 != nil {
 		panic(err2)
 	}
 
-	err := http.ListenAndServe(":8080", handler)
+	http.Handle("/", http.HandlerFunc(handlerFunc))
+	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		return
 	}
 	fmt.Println("Listening on port 8080")
-
 }
+
 func HandlerFunc(dict map[string]string, fallback http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -48,6 +55,7 @@ func HandlerFunc(dict map[string]string, fallback http.Handler) http.HandlerFunc
 		fallback.ServeHTTP(w, r)
 	}
 }
+
 func YmlHandler(bytes []byte, fallback http.Handler) http.HandlerFunc {
 	var slice []PathUrls
 	err := yaml.Unmarshal(bytes, &slice)
@@ -59,9 +67,4 @@ func YmlHandler(bytes []byte, fallback http.Handler) http.HandlerFunc {
 		pathToUrls[path.Path] = path.Url
 	}
 	return HandlerFunc(pathToUrls, fallback)
-}
-
-type PathUrls struct {
-	Path string `yaml:"path"`
-	Url  string `yaml:"url"`
 }
