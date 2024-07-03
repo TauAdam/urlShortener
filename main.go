@@ -7,11 +7,6 @@ import (
 	"net/http"
 )
 
-type RedirectHandler struct {
-	config   map[string]string
-	fallback http.Handler
-}
-
 func NewRedirectHandler(config map[string]string, fallback http.Handler) *RedirectHandler {
 	return &RedirectHandler{
 		config:   config,
@@ -29,7 +24,11 @@ func (h *RedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.fallback.ServeHTTP(w, r)
 }
 
-func LoadConfigFromYaml(bytes []byte) (map[string]string, error) {
+func LoadConfigFromYaml(bytes []byte, cache *Cache) (map[string]string, error) {
+	if cache.yamlConfig != nil {
+		return cache.yamlConfig, nil
+	}
+
 	var slice []PathUrls
 	err := yaml.Unmarshal(bytes, &slice)
 	if err != nil {
@@ -39,28 +38,28 @@ func LoadConfigFromYaml(bytes []byte) (map[string]string, error) {
 	for _, path := range slice {
 		pathToUrls[path.Path] = path.Url
 	}
+
+	cache.yamlConfig = pathToUrls
 	return pathToUrls, nil
 }
 
-type PathUrls struct {
-	Path string `yaml:"path"`
-	Url  string `yaml:"url"`
-}
+func LoadConfigFromJson(bytes []byte, cache *Cache) (map[string]string, error) {
+	if cache.jsonConfig != nil {
+		return cache.jsonConfig, nil
+	}
 
-type JsonConfig struct {
-	Config map[string]string `json:"config"`
-}
-
-func LoadConfigFromJson(bytes []byte) (map[string]string, error) {
 	var config JsonConfig
 	err := json.Unmarshal(bytes, &config)
 	if err != nil {
 		return nil, err
 	}
+
+	cache.jsonConfig = config.Config
 	return config.Config, nil
 }
-
 func main() {
+	cache := &Cache{}
+
 	yml := `
 - path: /rick
   url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
@@ -75,13 +74,13 @@ func main() {
 	}
 }`
 
-	yamlConfig, err := LoadConfigFromYaml([]byte(yml))
+	yamlConfig, err := LoadConfigFromYaml([]byte(yml), cache)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	jsonConfigMap, err := LoadConfigFromJson([]byte(jsonConfig))
+	jsonConfigMap, err := LoadConfigFromJson([]byte(jsonConfig), cache)
 	if err != nil {
 		fmt.Println(err)
 		return
