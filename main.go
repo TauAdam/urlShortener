@@ -57,6 +57,24 @@ func LoadConfigFromJson(bytes []byte, cache *Cache) (map[string]string, error) {
 	cache.jsonConfig = config.Config
 	return config.Config, nil
 }
+func LoadConfigFromTOML(bytes []byte, cache *Cache) (map[string]string, error) {
+    var config map[string]map[string]string
+    err := toml.Unmarshal(bytes, &config)
+    if err != nil {
+        return nil, err
+    }
+
+    pathToUrls := make(map[string]string)
+    for _, m := range config {
+        for path, url := range m {
+            pathToUrls[path] = url
+        }
+    }
+
+    cache.tomlConfig = pathToUrls
+    return pathToUrls, nil
+}
+
 func main() {
 	cache := &Cache{}
 
@@ -85,6 +103,17 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+tomlBytes, err := ioutil.ReadFile("config.toml")
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +126,8 @@ func main() {
 	http.Handle("/yaml/", http.StripPrefix("/yaml/", yamlHandler))
 	http.Handle("/json/", http.StripPrefix("/json/", jsonHandler))
 
+tomlHandler := NewRedirectHandler(tomlConfig, mux)
+http.Handle("/toml/", http.StripPrefix("/toml/", tomlHandler))
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println(err)
