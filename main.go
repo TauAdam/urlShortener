@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	yaml "gopkg.in/yaml.v2"
 	"net/http"
 )
 
@@ -16,6 +17,19 @@ func main() {
 		http.Redirect(w, r, "/", 301)
 	})
 	handler := HandlerFunc(dictionary, mux)
+
+	yml := `
+- path: /rick
+  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+- path: /google
+  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+	ymlHandler := YmlHandler([]byte(yml), HandlerFunc)
+
+	err2 := http.ListenAndServe(":8010", ymlHandler)
+	if err2 != nil {
+		panic(err2)
+	}
+
 	err := http.ListenAndServe(":8080", handler)
 	if err != nil {
 		return
@@ -33,4 +47,21 @@ func HandlerFunc(dict map[string]string, fallback http.Handler) http.HandlerFunc
 
 		fallback.ServeHTTP(w, r)
 	}
+}
+func YmlHandler(bytes []byte, fallback http.Handler) http.HandlerFunc {
+	var slice []PathUrls
+	err := yaml.Unmarshal(bytes, &slice)
+	if err != nil {
+		return nil
+	}
+	pathToUrls := make(map[string]string)
+	for _, path := range slice {
+		pathToUrls[path.Path] = path.Url
+	}
+	return HandlerFunc(pathToUrls, fallback)
+}
+
+type PathUrls struct {
+	Path string `yaml:"path"`
+	Url  string `yaml:"url"`
 }
