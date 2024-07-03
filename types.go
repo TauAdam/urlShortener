@@ -10,6 +10,7 @@ type RedirectHandler struct {
 type Cache struct {
 	yamlConfig map[string]string
 	jsonConfig map[string]string
+ tomlConfig map[string]string
 }
 type PathUrls struct {
 	Path string `yaml:"path"`
