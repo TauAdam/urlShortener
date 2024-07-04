@@ -5,20 +5,10 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 )
-
-type RedirectHandler struct {
-	config   map[string]string
-	fallback http.Handler
-}
-
-type RedirectRequest struct {
-	Path string
-	Url  string
-}
 
 func NewRedirectHandler(config map[string]string, fallback http.Handler) *RedirectHandler {
 	return &RedirectHandler{
@@ -35,12 +25,6 @@ func (h *RedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.fallback.ServeHTTP(w, r)
-}
-
-type Cache struct {
-	yamlConfig map[string]string
-	jsonConfig  map[string]string
-	tomlConfig  map[string]string
 }
 
 func LoadConfigFromYaml(bytes []byte, cache *Cache) (map[string]string, error) {
@@ -129,17 +113,17 @@ func main() {
 		return
 	}
 
-	tomlBytes, err := ioutil.ReadFile("config.toml")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	//tomlBytes, err := ioutil.ReadFile("config.toml")
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
 
-	tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	//tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
 
 	http.HandleFunc("/yaml/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path[6:] // strip "/yaml/"
@@ -159,27 +143,38 @@ func main() {
 		http.Error(w, "Not found", http.StatusNotFound)
 	})
 
-	http.HandleFunc("/toml/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[6:] // strip "/toml/"
-		if dest, ok := tomlConfig[path]; ok {
-			http.Redirect(w, r, dest, http.StatusSeeOther)
-			return
-		}
-		http.Error(w, "Not found", http.StatusNotFound)
-	})
+	//http.HandleFunc("/toml/", func(w http.ResponseWriter, r *http.Request) {
+	//	path := r.URL.Path[6:] // strip "/toml/"
+	//	if dest, ok := tomlConfig[path]; ok {
+	//		http.Redirect(w, r, dest, http.StatusSeeOther)
+	//		return
+	//	}
+	//	http.Error(w, "Not found", http.StatusNotFound)
+	//})
 
 	http.HandleFunc("/api/config/yaml", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(yamlConfig)
+		err := json.NewEncoder(w).Encode(yamlConfig)
+		if err != nil {
+			return
+		}
 	})
 
 	http.HandleFunc("/api/config/json", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(jsonConfigMap)
+		err := json.NewEncoder(w).Encode(jsonConfigMap)
+		if err != nil {
+			return
+		}
 	})
 
-	http.HandleFunc("/api/config/toml", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(tomlConfig)
+	//http.HandleFunc("/api/config/toml", func(w http.ResponseWriter, r *http.Request) {
+	//	json.NewEncoder(w).Encode(tomlConfig)
+	//})
+	http.HandleFunc("/api/map", func(w http.ResponseWriter, r *http.Request) {
+		err := json.NewEncoder(w).Encode(cache.jsonConfig)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	})
-
 	http.HandleFunc("/api/config/add", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Invalid request method", http.StatusBadRequest)
@@ -195,7 +190,7 @@ func main() {
 
 		yamlConfig[req.Path] = req.Url
 		jsonConfigMap[req.Path] = req.Url
-		tomlConfig[req.Path] = req.Url
+		//tomlConfig[req.Path] = req.Url
 
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -220,11 +215,11 @@ func main() {
 		return
 	}
 
-	err = saveMapToFile(tomlConfig, "toml_config.txt")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	//err = saveMapToFile(tomlConfig, "toml_config.txt")
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
 
 	fmt.Println("Maps saved to files")
 }
@@ -234,7 +229,12 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 
 	for key, value := range mapData {
 		_, err := f.WriteString(fmt.Sprintf("%s - %s\n", key, value))
@@ -251,7 +251,7 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 	for path, url := range mapData {
 		ymlBytes = append(ymlBytes, []byte(fmt.Sprintf("- path: %s\n  url: %s\n", path, url))...)
 	}
-	err = ioutil.WriteFile("yaml_config.yaml", ymlBytes, 0644)
+	err = os.WriteFile("yaml_config.yaml", ymlBytes, 0644)
 	if err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 	jsonBytes, err := json.Marshal(struct {
 		Config map[string]string
 	}{mapData})
-	err = ioutil.WriteFile("json_config.json", jsonBytes, 0644)
+	err = os.WriteFile("json_config.json", jsonBytes, 0644)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,12 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 	for path, url := range mapData {
 		_, err := f.WriteString(fmt.Sprintf("[%s]\nurl = \"%s\"\n\n", path, url))
 		if err != nil {
