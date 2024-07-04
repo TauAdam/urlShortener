@@ -2,4 +2,7 @@ module main
 
 go 1.22.4
 
-require gopkg.in/yaml.v2 v2.4.0 // indirect
+require (
+	github.com/BurntSushi/toml v1.4.0
+	gopkg.in/yaml.v2 v2.4.0
+)

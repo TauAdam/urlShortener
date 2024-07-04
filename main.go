@@ -3,8 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"net/http"
+	"os"
 )
 
 func NewRedirectHandler(config map[string]string, fallback http.Handler) *RedirectHandler {
@@ -58,21 +61,21 @@ func LoadConfigFromJson(bytes []byte, cache *Cache) (map[string]string, error) {
 	return config.Config, nil
 }
 func LoadConfigFromTOML(bytes []byte, cache *Cache) (map[string]string, error) {
-    var config map[string]map[string]string
-    err := toml.Unmarshal(bytes, &config)
-    if err != nil {
-        return nil, err
-    }
+	var config map[string]map[string]string
+	err := toml.Unmarshal(bytes, &config)
+	if err != nil {
+		return nil, err
+	}
 
-    pathToUrls := make(map[string]string)
-    for _, m := range config {
-        for path, url := range m {
-            pathToUrls[path] = url
-        }
-    }
+	pathToUrls := make(map[string]string)
+	for _, m := range config {
+		for path, url := range m {
+			pathToUrls[path] = url
+		}
+	}
 
-    cache.tomlConfig = pathToUrls
-    return pathToUrls, nil
+	cache.tomlConfig = pathToUrls
+	return pathToUrls, nil
 }
 
 func main() {
@@ -103,17 +106,17 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-tomlBytes, err := ioutil.ReadFile("config.toml")
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
+	tomlBytes, err := ioutil.ReadFile("config.toml")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-    tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
+	tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -126,8 +129,8 @@ tomlBytes, err := ioutil.ReadFile("config.toml")
 	http.Handle("/yaml/", http.StripPrefix("/yaml/", yamlHandler))
 	http.Handle("/json/", http.StripPrefix("/json/", jsonHandler))
 
-tomlHandler := NewRedirectHandler(tomlConfig, mux)
-http.Handle("/toml/", http.StripPrefix("/toml/", tomlHandler))
+	tomlHandler := NewRedirectHandler(tomlConfig, mux)
+	http.Handle("/toml/", http.StripPrefix("/toml/", tomlHandler))
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println(err)
@@ -135,4 +138,41 @@ http.Handle("/toml/", http.StripPrefix("/toml/", tomlHandler))
 	}
 
 	fmt.Println("Listening on port 8080")
+
+	// Save maps to files
+	err = saveMapToFile(yamlConfig, "yaml_config.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = saveMapToFile(jsonConfigMap, "json_config.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = saveMapToFile(tomlConfig, "toml_config.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println("Maps saved to files")
+}
+
+func saveMapToFile(mapData map[string]string, filePath string) error {
+	f, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for key, value := range mapData {
+		_, err := f.WriteString(fmt.Sprintf("%s - %s\n", key, value))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
