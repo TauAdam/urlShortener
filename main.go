@@ -15,6 +15,11 @@ type RedirectHandler struct {
 	fallback http.Handler
 }
 
+type RedirectRequest struct {
+	Path string
+	Url  string
+}
+
 func NewRedirectHandler(config map[string]string, fallback http.Handler) *RedirectHandler {
 	return &RedirectHandler{
 		config:   config,
@@ -34,8 +39,8 @@ func (h *RedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type Cache struct {
 	yamlConfig map[string]string
-	jsonConfig map[string]string
-	tomlConfig map[string]string
+	jsonConfig  map[string]string
+	tomlConfig  map[string]string
 }
 
 func LoadConfigFromYaml(bytes []byte, cache *Cache) (map[string]string, error) {
@@ -175,6 +180,26 @@ func main() {
 		json.NewEncoder(w).Encode(tomlConfig)
 	})
 
+	http.HandleFunc("/api/config/add", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Invalid request method", http.StatusBadRequest)
+			return
+		}
+
+		var req RedirectRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		yamlConfig[req.Path] = req.Url
+		jsonConfigMap[req.Path] = req.Url
+		tomlConfig[req.Path] = req.Url
+
+		w.WriteHeader(http.StatusCreated)
+	})
+
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println(err)
@@ -183,7 +208,6 @@ func main() {
 
 	fmt.Println("Listening on port 8080")
 
-	// Save maps to files
 	err = saveMapToFile(yamlConfig, "yaml_config.txt")
 	if err != nil {
 		fmt.Println(err)
@@ -218,5 +242,41 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 			return err
 		}
 	}
+
+	// Save YAML config
+	ymlBytes, err := yaml.Marshal([]struct {
+		Path string
+		Url  string
+	}{})
+	for path, url := range mapData {
+		ymlBytes = append(ymlBytes, []byte(fmt.Sprintf("- path: %s\n  url: %s\n", path, url))...)
+	}
+	err = ioutil.WriteFile("yaml_config.yaml", ymlBytes, 0644)
+	if err != nil {
+		return err
+	}
+
+	// Save JSON config
+	jsonBytes, err := json.Marshal(struct {
+		Config map[string]string
+	}{mapData})
+	err = ioutil.WriteFile("json_config.json", jsonBytes, 0644)
+	if err != nil {
+		return err
+	}
+
+	// Save TOML config
+	f, err = os.Create("toml_config.toml")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for path, url := range mapData {
+		_, err := f.WriteString(fmt.Sprintf("[%s]\nurl = \"%s\"\n\n", path, url))
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
