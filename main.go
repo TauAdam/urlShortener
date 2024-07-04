@@ -10,6 +10,11 @@ import (
 	"os"
 )
 
+type RedirectHandler struct {
+	config   map[string]string
+	fallback http.Handler
+}
+
 func NewRedirectHandler(config map[string]string, fallback http.Handler) *RedirectHandler {
 	return &RedirectHandler{
 		config:   config,
@@ -27,12 +32,21 @@ func (h *RedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.fallback.ServeHTTP(w, r)
 }
 
+type Cache struct {
+	yamlConfig map[string]string
+	jsonConfig map[string]string
+	tomlConfig map[string]string
+}
+
 func LoadConfigFromYaml(bytes []byte, cache *Cache) (map[string]string, error) {
 	if cache.yamlConfig != nil {
 		return cache.yamlConfig, nil
 	}
 
-	var slice []PathUrls
+	var slice []struct {
+		Path string
+		Url  string
+	}
 	err := yaml.Unmarshal(bytes, &slice)
 	if err != nil {
 		return nil, err
@@ -51,7 +65,9 @@ func LoadConfigFromJson(bytes []byte, cache *Cache) (map[string]string, error) {
 		return cache.jsonConfig, nil
 	}
 
-	var config JsonConfig
+	var config struct {
+		Config map[string]string
+	}
 	err := json.Unmarshal(bytes, &config)
 	if err != nil {
 		return nil, err
@@ -60,6 +76,7 @@ func LoadConfigFromJson(bytes []byte, cache *Cache) (map[string]string, error) {
 	cache.jsonConfig = config.Config
 	return config.Config, nil
 }
+
 func LoadConfigFromTOML(bytes []byte, cache *Cache) (map[string]string, error) {
 	var config map[string]map[string]string
 	err := toml.Unmarshal(bytes, &config)
@@ -106,6 +123,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
 	tomlBytes, err := ioutil.ReadFile("config.toml")
 	if err != nil {
 		fmt.Println(err)
@@ -118,19 +136,45 @@ func main() {
 		return
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/", 301)
+	http.HandleFunc("/yaml/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[6:] // strip "/yaml/"
+		if dest, ok := yamlConfig[path]; ok {
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
 	})
 
-	yamlHandler := NewRedirectHandler(yamlConfig, mux)
-	jsonHandler := NewRedirectHandler(jsonConfigMap, mux)
+	http.HandleFunc("/json/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[6:] // strip "/json/"
+		if dest, ok := jsonConfigMap[path]; ok {
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
+	})
 
-	http.Handle("/yaml/", http.StripPrefix("/yaml/", yamlHandler))
-	http.Handle("/json/", http.StripPrefix("/json/", jsonHandler))
+	http.HandleFunc("/toml/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[6:] // strip "/toml/"
+		if dest, ok := tomlConfig[path]; ok {
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
+	})
 
-	tomlHandler := NewRedirectHandler(tomlConfig, mux)
-	http.Handle("/toml/", http.StripPrefix("/toml/", tomlHandler))
+	http.HandleFunc("/api/config/yaml", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(yamlConfig)
+	})
+
+	http.HandleFunc("/api/config/json", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(jsonConfigMap)
+	})
+
+	http.HandleFunc("/api/config/toml", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(tomlConfig)
+	})
+
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println(err)
