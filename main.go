@@ -126,7 +126,7 @@ func main() {
 	//}
 
 	http.HandleFunc("/yaml/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[6:] // strip "/yaml/"
+		path := r.URL.Path[5:] // strip "/yaml/"
 		if dest, ok := yamlConfig[path]; ok {
 			http.Redirect(w, r, dest, http.StatusSeeOther)
 			return
@@ -135,7 +135,7 @@ func main() {
 	})
 
 	http.HandleFunc("/json/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[6:] // strip "/json/"
+		path := r.URL.Path[5:] // strip "/json/"
 		if dest, ok := jsonConfigMap[path]; ok {
 			http.Redirect(w, r, dest, http.StatusSeeOther)
 			return
