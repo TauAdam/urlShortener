@@ -88,18 +88,18 @@ func main() {
 	cache := &Cache{}
 
 	yml := `
-- path: /rick
-  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-- path: /google
-  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+	- path: /rick
+	  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+	- path: /google
+	  url: https://www.youtube.com/watch?v=dQw4w9WgXcQ`
 
 	jsonConfig := `
-{
-	"config": {
-		"/rick": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-		"/google": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-	}
-}`
+	{
+		"config": {
+			"/rick": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			"/google": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+		}
+	}`
 
 	yamlConfig, err := LoadConfigFromYaml([]byte(yml), cache)
 	if err != nil {
@@ -113,44 +113,23 @@ func main() {
 		return
 	}
 
-	//tomlBytes, err := ioutil.ReadFile("config.toml")
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-
-	//tomlConfig, err := LoadConfigFromTOML(tomlBytes, cache)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-
 	http.HandleFunc("/yaml/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[5:] // strip "/yaml/"
+		path := r.URL.Path[5:]
 		if dest, ok := yamlConfig[path]; ok {
 			http.Redirect(w, r, dest, http.StatusSeeOther)
 			return
 		}
-		http.Error(w, "Not found", http.StatusNotFound)
+		http.Error(w, "Alias not found", http.StatusNotFound)
 	})
 
 	http.HandleFunc("/json/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[5:] // strip "/json/"
+		path := r.URL.Path[5:]
 		if dest, ok := jsonConfigMap[path]; ok {
 			http.Redirect(w, r, dest, http.StatusSeeOther)
 			return
 		}
-		http.Error(w, "Not found", http.StatusNotFound)
+		http.Error(w, "Alias not found", http.StatusNotFound)
 	})
-
-	//http.HandleFunc("/toml/", func(w http.ResponseWriter, r *http.Request) {
-	//	path := r.URL.Path[6:] // strip "/toml/"
-	//	if dest, ok := tomlConfig[path]; ok {
-	//		http.Redirect(w, r, dest, http.StatusSeeOther)
-	//		return
-	//	}
-	//	http.Error(w, "Not found", http.StatusNotFound)
-	//})
 
 	http.HandleFunc("/api/config/yaml", func(w http.ResponseWriter, r *http.Request) {
 		err := json.NewEncoder(w).Encode(yamlConfig)
@@ -166,9 +145,6 @@ func main() {
 		}
 	})
 
-	//http.HandleFunc("/api/config/toml", func(w http.ResponseWriter, r *http.Request) {
-	//	json.NewEncoder(w).Encode(tomlConfig)
-	//})
 	http.HandleFunc("/api/map", func(w http.ResponseWriter, r *http.Request) {
 		err := json.NewEncoder(w).Encode(cache.jsonConfig)
 		if err != nil {
@@ -190,7 +166,6 @@ func main() {
 
 		yamlConfig[req.Path] = req.Url
 		jsonConfigMap[req.Path] = req.Url
-		//tomlConfig[req.Path] = req.Url
 
 		w.WriteHeader(http.StatusCreated)
 	})
@@ -215,12 +190,6 @@ func main() {
 		return
 	}
 
-	//err = saveMapToFile(tomlConfig, "toml_config.txt")
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-
 	fmt.Println("Maps saved to files")
 }
 
@@ -243,7 +212,6 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 		}
 	}
 
-	// Save YAML config
 	ymlBytes, err := yaml.Marshal([]struct {
 		Path string
 		Url  string
@@ -256,7 +224,6 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 		return err
 	}
 
-	// Save JSON config
 	jsonBytes, err := json.Marshal(struct {
 		Config map[string]string
 	}{mapData})
@@ -265,17 +232,6 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 		return err
 	}
 
-	// Save TOML config
-	f, err = os.Create("toml_config.toml")
-	if err != nil {
-		return err
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-
-		}
-	}(f)
 	for path, url := range mapData {
 		_, err := f.WriteString(fmt.Sprintf("[%s]\nurl = \"%s\"\n\n", path, url))
 		if err != nil {
@@ -285,3 +241,4 @@ func saveMapToFile(mapData map[string]string, filePath string) error {
 
 	return nil
 }
+
